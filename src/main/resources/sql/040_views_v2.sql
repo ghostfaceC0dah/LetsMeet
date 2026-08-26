@@ -1,0 +1,36 @@
+-- ============================================================================
+-- Datenvertrag Akt 2 (V2) - NOCH NICHT GEBAUT.
+--
+-- Akt 2 ist erst freigegeben, wenn Akt 1 abgeschlossen ist. Die Tabellen dafuer
+-- stehen aber schon (030_schema_akt2.sql), es fehlen nur diese fuenf Views.
+-- Der Vertrag aus der readme.md, Spaltennamen und Typen exakt:
+--
+--   migration_users(email text, first_name text, last_name text, birth_date date,
+--                   postal_code text, city text, phone text, gender text)
+--   migration_user_interests(email text, interest_code text)
+--   migration_user_hobbies(email text, hobby_name text, priority integer, source text)
+--   migration_likes(liker_email text, liked_email text, status text, liked_at timestamp)
+--   migration_messages(sender_email text, receiver_email text, body text,
+--                      sent_at timestamp, conversation_id integer)
+--
+-- Beachtet dabei:
+--   * migration_users bekommt zwei Spalten mehr als in V1 - die alte View muss
+--     also ersetzt werden (DROP VIEW ... dann CREATE VIEW).
+--   * Likes und Nachrichten sind gerichtet: Absender links.
+--   * In V2 ist source bei allen Hobbyzuordnungen 'excel'. Die XML-Nachlieferung
+--     gehoert zu einem spaeteren Akt - nicht mit importieren.
+--
+-- Ein Beispiel, damit das Muster klar ist (die Namensuebersetzung passiert wie
+-- in 020_views_v1.sql per AS):
+--
+-- CREATE VIEW migration_user_hobbies AS
+-- SELECT p.email          AS email,
+--        h.bezeichnung    AS hobby_name,
+--        ph.prioritaet    AS priority,
+--        ph.quelle        AS source
+-- FROM person p
+-- JOIN person_hobby ph ON ph.person_id = p.person_id
+-- JOIN hobby h         ON h.hobby_id  = ph.hobby_id;
+-- ============================================================================
+
+-- TODO Akt 2: die fuenf Views bauen
