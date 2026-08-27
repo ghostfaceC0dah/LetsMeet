@@ -403,20 +403,23 @@ Modell kann jeden Anwendungsfall des Diagramms beantworten.
 
 ## 7. Phase 7 — Abnahme
 
-Prüfstand V1 gegen das leere Modell:
+Prüfstand V1 nach frischem Import in eine leere Datenbank — der Ablauf, der am
+Akt-Gate zählt: leeren, importieren, prüfen.
 
 ```
 ✔ Vertrags-View und Spaltentypen      View migration_users entspricht dem vereinbarten Spaltensatz.
 ✔ Schlüsselqualität email             Jede Zeile hat eine eindeutige, nicht leere E-Mail-Adresse.
+✔ Vollständigkeit des Bestands        Alle 1.576 Personen aus der Quelle sind im Bestand.
 ✔ Feldabgleich gegen die Quelle       Alle verglichenen Feldwerte stimmen zeichengenau überein.
-✘ Vollständigkeit des Bestands        Bestand: 0 von 1.576 Zeilen.
+
+GATE GRÜN — das V1-Paket ist bestanden.
 ```
 
-**Das ist die richtige rote Zeile.** Was am Modell hängt, ist grün: Spaltensatz,
-Typen, Schlüsselqualität. Rot ist allein die Vollständigkeit — die füllt der
-Import, und der ist nicht Teil dieses Entwurfs. Das Gerüst dafür liegt in
-`parse/RowSplitter` mit roten Tests, der Weg steht in
-[`START.md`](../START.md).
+Der Feldabgleich ist der eigentliche Beleg für die Entwurfsentscheidungen: er
+vergleicht zeichengenau und ungetrimmt gegen die Quelle. Dass er grün ist,
+heißt, dass `plz text`, der Schnitt an der ersten `", "`-Fundstelle und der
+Verzicht auf jedes `trim()` zusammen aufgehen. Offen ist ab hier Akt 2: die fünf
+V2-Views und der MongoDB-Import.
 
 ---
 
