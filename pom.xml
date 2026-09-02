@@ -28,13 +28,12 @@
       <version>5.3.0</version>
     </dependency>
 
-    <!-- Fuer Akt 2 kommt hier die MongoDB dazu:
+    <!-- MongoDB-Quelle (Akt 2): ergaenzende Profildaten, Likes, Nachrichten -->
     <dependency>
       <groupId>org.mongodb</groupId>
       <artifactId>mongodb-driver-sync</artifactId>
       <version>5.2.0</version>
     </dependency>
-    -->
 
     <!-- Nur damit POI beim Start keine Log4j-Fehlermeldung wirft -->
     <dependency>

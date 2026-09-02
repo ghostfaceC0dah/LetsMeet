@@ -5,11 +5,15 @@ import de.letsmeet.migration.model.Person;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
-/** Schreibt Personen in die Tabelle {@code person}. */
+/** Schreibt Personen in die Tabelle {@code person} und liest ihre IDs zurueck. */
 public final class PersonRepository {
 
     /**
@@ -56,6 +60,18 @@ public final class PersonRepository {
             geschrieben += zaehle(statement.executeBatch());
         }
         return geschrieben;
+    }
+
+    /** @return {@code lower(email) -> person_id} fuer alle Personen im Bestand */
+    public Map<String, Long> idsByEmailKey(Connection connection) throws SQLException {
+        Map<String, Long> ids = new HashMap<>();
+        try (Statement statement = connection.createStatement();
+             ResultSet zeilen = statement.executeQuery("SELECT person_id, email FROM person")) {
+            while (zeilen.next()) {
+                ids.put(zeilen.getString(2).strip().toLowerCase(Locale.ROOT), zeilen.getLong(1));
+            }
+        }
+        return ids;
     }
 
     private static int zaehle(int[] ergebnisse) {

@@ -6,6 +6,7 @@ import de.letsmeet.migration.db.SqlCheckRunner;
 import de.letsmeet.migration.db.SqlScriptRunner;
 import de.letsmeet.migration.pipeline.ExcelImport;
 import de.letsmeet.migration.pipeline.ImportReport;
+import de.letsmeet.migration.pipeline.MongoImport;
 import de.letsmeet.migration.source.excel.ExcelUserReader;
 import de.letsmeet.migration.source.excel.ExcelUserRow;
 
@@ -25,15 +26,17 @@ import java.util.List;
  * <pre>
  * mvn package
  * java -jar target/letsmeet-migration.jar          zeigt Umgebung und Rohdaten
- * java -jar target/letsmeet-migration.jar build    Schema + View + Import + Pruefungen
+ * java -jar target/letsmeet-migration.jar build    Akt 2 (V2): Schema + Views + Excel + MongoDB
+ * java -jar target/letsmeet-migration.jar build v1 Akt 1 (V1): Schema + Views + nur Excel
  * </pre>
  *
- * Der Abschluss von Akt 1 - leeren, importieren, pruefen:
+ * V1 und V2 sind unterschiedliche Vertraege auf {@code migration_users} und
+ * schliessen sich aus - je Gate wird neu aufgebaut. Abschluss Akt 2:
  * <pre>
  * docker compose exec postgres_for_lf8_starter psql -U user -d lf8_lets_meet_db \
  *   -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
  * java -jar target/letsmeet-migration.jar build
- * docker compose run --rm -e CONTRACT_VERSION=V1 kundinnen_app node server/dist/cli.js
+ * docker compose run --rm -e CONTRACT_VERSION=V2 kundinnen_app node server/dist/cli.js
  * </pre>
  *
  * Das Leeren macht absichtlich der dokumentierte Handbefehl und nicht dieses
@@ -43,7 +46,9 @@ import java.util.List;
 public final class Main {
 
     private static final String SCHEMA = "sql/010_schema.sql";
-    private static final String VIEW_V1 = "sql/020_views_v1.sql";
+    private static final String SCHEMA_AKT2 = "sql/030_schema_akt2.sql";
+    private static final String VIEWS_V1 = "sql/020_views_v1.sql";
+    private static final String VIEWS_V2 = "sql/040_views_v2.sql";
 
     private static final String LEEREN_A =
             "  docker compose exec postgres_for_lf8_starter psql -U user \\\n"
@@ -53,11 +58,10 @@ public final class Main {
     public static void main(String[] args) {
         AppConfig config = AppConfig.fromEnvironment();
         Database database = new Database(config);
-        String befehl = args.length == 0 ? "zeigen" : args[0];
 
         int exitCode;
         try {
-            exitCode = fuehreAus(befehl, config, database);
+            exitCode = fuehreAus(args, config, database);
         } catch (Exception e) {
             exitCode = abbruch(e);
         }
@@ -66,8 +70,9 @@ public final class Main {
         }
     }
 
-    private static int fuehreAus(String befehl, AppConfig config, Database database)
+    private static int fuehreAus(String[] args, AppConfig config, Database database)
             throws Exception {
+        String befehl = args.length == 0 ? "zeigen" : args[0];
         return switch (befehl) {
             case "zeigen" -> {
                 zeigen(config, database);
@@ -75,20 +80,26 @@ public final class Main {
             }
             case "schema" -> {
                 skript(database, SCHEMA);
-                System.out.println("Schema angelegt (" + SCHEMA + ").");
+                skript(database, SCHEMA_AKT2);
+                System.out.println("Schema angelegt (" + SCHEMA + ", " + SCHEMA_AKT2 + ").");
                 yield 0;
             }
-            case "view" -> {
-                skript(database, VIEW_V1);
-                System.out.println("View angelegt (" + VIEW_V1 + ").");
+            case "views" -> {
+                skript(database, VIEWS_V2);
+                System.out.println("Views angelegt (" + VIEWS_V2 + ").");
                 yield 0;
             }
             case "import" -> {
                 bericht(new ExcelImport(config, database).run());
                 yield 0;
             }
+            case "import-mongo" -> {
+                bericht(new MongoImport(config, database).run());
+                yield 0;
+            }
             case "check" -> pruefen(database);
-            case "build" -> build(config, database);
+            case "build" -> build(config, database,
+                    args.length > 1 && args[1].equalsIgnoreCase("v1"));
             default -> {
                 hilfe();
                 yield 64;
@@ -99,13 +110,20 @@ public final class Main {
     // ---------------------------------------------------------------- Befehle ---
 
     /**
-     * Der reproduzierbare Neuaufbau: Schema, View, Import, eigene Pruefungen.
+     * Der reproduzierbare Neuaufbau aus einer LEEREN Datenbank.
      *
-     * <p>Bricht ab, wenn das Schema nicht leer ist. Fuer den Akt-Abschluss
-     * zaehlt der Aufbau aus einer LEEREN Datenbank - und ein zur Haelfte
-     * ueberschriebenes Schema waere schlimmer als ein klarer Abbruch.
+     * <p>V1 und V2 sind unterschiedliche Vertraege auf derselben View
+     * {@code migration_users} (V1: 6 Spalten, Excel woertlich; V2: 8 Spalten,
+     * bei Konflikt die juengere Quelle). Ein Aufbau kann nur einen erfuellen -
+     * also je Gate neu aufbauen:
+     * <pre>
+     *   build      Akt 2 (Standard): Schema + V2-Views + Excel + MongoDB
+     *   build v1   Akt 1: Schema + V1-Views + nur Excel, kein MongoDB
+     * </pre>
+     *
+     * <p>Bricht ab, wenn das Schema nicht leer ist.
      */
-    private static int build(AppConfig config, Database database) throws Exception {
+    private static int build(AppConfig config, Database database, boolean v1) throws Exception {
         List<String> vorhanden = objekteImSchema(database);
         if (!vorhanden.isEmpty()) {
             System.out.println("Abgebrochen: das Schema 'public' ist nicht leer.");
@@ -121,11 +139,23 @@ public final class Main {
             return 2;
         }
 
+        // Fuer V2 die MongoDB zuerst lesen: laeuft sie nicht, bricht build ab,
+        // bevor am Schema etwas passiert (ein halber Neuaufbau waere schlimmer).
+        MongoImport mongo = v1 ? null : new MongoImport(config, database);
+        if (mongo != null) {
+            mongo.pruefeQuelle();
+        }
+
         skript(database, SCHEMA);
-        skript(database, VIEW_V1);
-        System.out.println("Schema und View angelegt.");
+        skript(database, SCHEMA_AKT2);
+        skript(database, v1 ? VIEWS_V1 : VIEWS_V2);
+        System.out.println("Schema und Views " + (v1 ? "V1" : "V2") + " angelegt.");
         System.out.println();
         bericht(new ExcelImport(config, database).run());
+        if (mongo != null) {
+            System.out.println();
+            bericht(mongo.run());
+        }
         System.out.println();
         return pruefen(database);
     }
@@ -191,8 +221,8 @@ public final class Main {
 
     /**
      * Ein Abbruch soll lesbar sein und nicht als Stacktrace erscheinen. Fuer die
-     * drei Fehler, die man beim Arbeiten wirklich trifft, steht der naechste
-     * Schritt gleich dabei.
+     * Fehler, die man beim Arbeiten wirklich trifft, steht der naechste Schritt
+     * gleich dabei.
      */
     private static int abbruch(Exception e) {
         System.out.println();
@@ -204,6 +234,13 @@ public final class Main {
             System.out.println("Die Quelldatei wurde nicht gefunden. Startet das Programm im");
             System.out.println("Projektverzeichnis (dort, wo compose.yml liegt), oder setzt den Pfad:");
             System.out.println("  LETSMEET_EXCEL=\"/pfad/zu/Lets Meet DB Dump.xlsx\" java -jar ...");
+        } else if (e.getMessage() != null && e.getMessage().startsWith("MongoDB nicht erreichbar")) {
+            System.out.println();
+            System.out.println("Die MongoDB-Quelle laeuft nicht (oder auf einem anderen Port).");
+            System.out.println("  Variante A: docker compose up -d mongodb_for_lf8");
+            System.out.println("  Variante B: letsmeet up");
+            System.out.println("Anderer Port/Host? Dann LETSMEET_MONGO_URI setzen, siehe AppConfig.");
+            System.out.println("Am Schema wurde noch nichts geaendert - nach dem Start einfach 'build' erneut.");
         } else if (e instanceof SQLException sql) {
             String zustand = sql.getSQLState() == null ? "" : sql.getSQLState();
             if (zustand.isEmpty() || zustand.startsWith("08")) {
@@ -297,12 +334,14 @@ public final class Main {
     private static void hilfe() {
         System.out.println("""
                 --- Befehle ---
-                  (ohne)    Umgebung pruefen und Rohdaten zeigen
-                  build     Schema + View + Import + eigene Pruefungen  <- der Neuaufbau
-                  schema    nur die Tabelle person anlegen
-                  view      nur die View migration_users anlegen
-                  import    nur den Excel-Import
-                  check     nur die eigenen Datenpruefungen
+                  (ohne)       Umgebung pruefen und Rohdaten zeigen
+                  build        Akt 2 (V2): Schema + Views + Excel + MongoDB + Pruefungen
+                  build v1     Akt 1 (V1): Schema + Views + nur Excel + Pruefungen
+                  schema       nur die Tabellen anlegen (Akt 1 + Akt 2)
+                  views        nur die Views V2 anlegen
+                  import       nur den Excel-Import
+                  import-mongo  nur die MongoDB-Nachlieferung
+                  check        nur die eigenen Datenpruefungen
 
                 Exit-Code 0 = alles durchgelaufen, 2 = offener Befund.
                 Der Ablauf fuer den Akt-Abschluss steht in readme.md.

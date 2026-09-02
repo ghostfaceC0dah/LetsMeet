@@ -121,6 +121,25 @@ public final class RowSplitter {
     }
 
     /**
+     * Zerlegt die Spalte "Interessiert an". Werte in der Quelle: {@code m},
+     * {@code w}, {@code mw}. {@code mw} sind zwei Interessen in einer Zelle
+     * (1NF), jedes Zeichen ein Rohcode - keine Uebersetzung.
+     *
+     * @return die Codes ohne Dubletten; leere Liste bei leerer Zelle
+     */
+    public static java.util.List<String> splitInterests(String cell) {
+        java.util.LinkedHashSet<String> codes = new java.util.LinkedHashSet<>();
+        if (cell != null) {
+            for (String zeichen : cell.strip().split("")) {
+                if (!zeichen.isBlank()) {
+                    codes.add(zeichen);
+                }
+            }
+        }
+        return new java.util.ArrayList<>(codes);
+    }
+
+    /**
      * Der quellenuebergreifende Schluessel: die E-Mail in Kleinschreibung.
      *
      * <p>Der Datenvertrag verlangt eindeutige E-Mails; ab Akt 2 gilt zusaetzlich

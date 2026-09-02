@@ -123,6 +123,27 @@ class RowSplitterTest {
         assertThrows(SourceDataException.class, () -> RowSplitter.parseBirthDate(null));
     }
 
+    // --- Interessiert an --------------------------------------------------
+
+    @Test
+    void einzelnerInteressenCodeBleibtEineZeile() {
+        assertEquals(java.util.List.of("m"), RowSplitter.splitInterests("m"));
+        assertEquals(java.util.List.of("w"), RowSplitter.splitInterests("w"));
+    }
+
+    @Test
+    @DisplayName("\"mw\" sind zwei Interessen, nicht ein Rohwert")
+    void mwWirdInZweiCodesZerlegt() {
+        assertEquals(java.util.List.of("m", "w"), RowSplitter.splitInterests("mw"));
+    }
+
+    @Test
+    void leereInteressenzelleErgibtKeineZeile() {
+        assertEquals(java.util.List.of(), RowSplitter.splitInterests(""));
+        assertEquals(java.util.List.of(), RowSplitter.splitInterests(null));
+        assertEquals(java.util.List.of(), RowSplitter.splitInterests("  "));
+    }
+
     // --- E-Mail-Schluessel --------------------------------------------------
 
     @Test

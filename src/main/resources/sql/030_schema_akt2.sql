@@ -52,8 +52,9 @@ CREATE TABLE person_hobby (
 );
 
 -- ---------------------------------------------------------------------------
--- person_interesse - "Interessiert an" ist ein Mehrfachwert (Wert "mw" steht
--- 33x in der Quelle), also eine eigene Tabelle: eine Zeile je Interesse (1NF).
+-- person_interesse - "Interessiert an" ist ein Mehrfachwert: "mw" (33x in der
+-- Quelle) sind zwei Interessen in einer Zelle. Also eine eigene Tabelle, eine
+-- Zeile je Code (1NF) - "mw" ergibt die zwei Zeilen 'm' und 'w'.
 -- interesse_code bleibt der Rohwert - keine Uebersetzung, keine Codetabelle.
 -- ---------------------------------------------------------------------------
 CREATE TABLE person_interesse (
